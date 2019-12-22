@@ -1,5 +1,8 @@
 
+inline float SphereDistance(float3 position, float4 posNsize, float4 reps) {
 
+	return length(frac((position - posNsize.xyz + reps.y)* reps.z) * reps.x - reps.y) - posNsize.w;
+}
 
 inline float CubeDistance(float3 p, float4 posNsize, float3 size, float softness) {
 

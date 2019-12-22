@@ -46,7 +46,7 @@
 
 				sampler2D _Global_Noise_Lookup;
 
-
+				sampler2D _MainTex;
 				float _RayMarchSmoothness;
 				float _RayMarchShadowSoftness;
 				uniform float4 RayMarchCube_0;
@@ -61,6 +61,10 @@
 				uniform float4 RayMarchLight_0;
 
 				uniform float4 _RayMarchLightColor;
+				uniform float4 _RayMarchFogColor;
+				uniform float4 _RayMarchReflectionColor;
+				float _maxRayMarchSteps;
+				float _MaxRayMarchDistance;
 
 				v2f vert(appdata_full v) {
 					v2f o;
@@ -74,16 +78,6 @@
 					o.color = v.color;
 					return o;
 				}
-
-
-				inline float SphereDistance(float3 position, float4 posNsize, float4 reps) {
-
-					return length(frac((position - posNsize.xyz + reps.y)* reps.z) * reps.x - reps.y) - posNsize.w;
-				}
-
-			
-
-			
 
 
 
@@ -131,25 +125,25 @@
 				}
 
 
-				inline float Reflection(float3 start, float3 direction, float mint, float maxt, float k, out float t, out float3 pos)
+				inline float Reflection(float3 start, float3 direction, float mint, float k, out float totalDist, out float3 pos, float maxSteps)
 				{
 
 					float closest = mint;
-					t = mint;
+					totalDist = mint;
 					pos = start;
 
-					for ( int i=0; i<40; i++)
+					for ( int i=0; i< 35; i++)
 					{
-						pos = start + direction * t;
+						pos = start + direction * totalDist;
 
 						float h = SceneSdf(pos);
 						
-						closest = min(h/t, closest);
+						closest = min(h/ totalDist, closest);
 
 						//if (h < 0.01)
 						//	return 0.0;
 
-						t += h;
+						totalDist += h;
 					}
 
 
@@ -171,6 +165,10 @@
 
 				float4 frag(v2f o) : COLOR{
 
+					float4 tex = tex2D(_MainTex, (o.screenPos.xy)*0.5);
+
+//					return tex;
+
 					o.viewDir.xyz = normalize(o.viewDir.xyz + o.normal.xyz);
 
 					float3 position = o.worldPos.xyz;
@@ -183,15 +181,15 @@
 					float dist;
 					float dott = 1;
 
-					const float maxSteps = 40;
+					//const float maxSteps = 40;
+					_MaxRayMarchDistance += 1;
 
-					const float maxDistance = 10000;
 
 					bool gotSky = false;
 
 
 
-					for (int i = 0; i < maxSteps; i++) {
+					for (int i = 0; i < _maxRayMarchSteps; i++) {
 
 						dist = SceneSdf(position);
 
@@ -220,79 +218,79 @@
 
 					float3 lightDir = normalize(toCenterVec);
 
+					float lightRange = RayMarchLight_0.w + 1;
+					float deLightRange = 1 / lightRange;
+
+					float lightBrightness = max(0, lightRange - toCenter) * deLightRange;
+
 					float4 noise = tex2Dlod(_Global_Noise_Lookup, float4(o.screenPos.xy * 13.5 + float2(_SinTime.w, _CosTime.w) * 32, 0, 0));
 
-
-					float shadow = Softshadow(position, lightDir, 5, toCenter,  _RayMarchShadowSoftness);
-
-
-					//	return shadow;
-
-						float toview = max(0, dot(normal, o.viewDir.xyz));
-
-						float3 reflected = normalize(o.viewDir.xyz - 2 * (toview)*normal);
-
-						float reflectedDistance;
-
-						float3 reflectionPos;
-
-						float reflectedSky = Reflection(position, -reflected, 0.1, maxDistance, 1, reflectedDistance, reflectionPos);
-
-						float3 toCenterVecRefl = lightSource - reflectionPos;
-
-						float toCenterRefl = length(toCenterVecRefl);
-
-						float3 lightDirRef = normalize(toCenterVecRefl);
-
-						float reflectedShadow = Softshadow(reflectionPos, lightDirRef, 2, toCenterRefl, _RayMarchShadowSoftness);
-
-						//float reflectedShadow = 1;
-
-					//	return reflectedShadow;
-
+					float shadow = 0;
 					
-						float light = max(0, dot(lightDir, normal));
+					if (lightRange> toCenter)
+						shadow = Softshadow(position, lightDir, 5, toCenter, _RayMarchShadowSoftness);
 
-						float4 col = 1;
+					float toview = max(0, dot(normal, o.viewDir.xyz));
 
-						float lightRange = RayMarchLight_0.w + 1;
-						float deLightRange = 1 / lightRange;
+					float3 reflected = normalize(o.viewDir.xyz - 2 * (toview)*normal);
 
-						float lightBrightness = max(0, lightRange - toCenter) * deLightRange;
+					float reflectedDistance;
 
-						float lightBrightnessReflected = max(0, lightRange - length (reflectionPos - position)) *deLightRange;
+					float3 reflectionPos;
 
-						col.rgb = (_RayMarchLightColor.rgb * light * shadow * lightBrightness + unity_AmbientEquator.rgb);
+					float reflectedSky = Reflection(position, -reflected, 0.1, 1, reflectedDistance, reflectionPos, _maxRayMarchSteps);
 
-						float deFog = 1 - totalDistance / maxDistance;
-						deFog *= deFog;
+					float3 toCenterVecRefl = lightSource - reflectionPos;
 
-						float reflectedFog = max(0, 1 - reflectedDistance / maxDistance);
+					float toCenterRefl = length(toCenterVecRefl);
 
-						float3 fogColor = float3(0.2, 0.2, 0.9);
+					float3 lightDirRef = normalize(toCenterVecRefl);
 
-						float reflAmount = pow(deFog * reflectedFog, 8);
-
-						reflectedFog *= reflAmount;
-
-						dott *= reflAmount;
-						
-						reflectedSky = reflectedSky * (reflAmount) +(1 - reflAmount);
-
-						lightBrightnessReflected *= reflAmount;
-
-						float3 reflCol = (_RayMarchLightColor.rgb * reflectedShadow * lightBrightnessReflected *(1 - reflectedSky));
-						
-						float edge = pow(dott , 4) * reflAmount * reflAmount;
-
-						reflCol = reflCol * float3(1,4,1) * (1 - edge); // +edge * (_RayMarchLightColor.rgb + fogColor);
+					float reflectedShadow = 0;
 					
-						col.rgb += dott * reflCol;
+					if (lightRange> toCenterRefl)
+						reflectedShadow =	Softshadow(reflectionPos, lightDirRef, 2, toCenterRefl, _RayMarchShadowSoftness);
 
-						col.rgb +=  (noise.rgb - 0.5)*col.rgb*0.2;
+					float light = max(0, dot(lightDir, normal));
 
-						col.rgb = col.rgb * deFog + fogColor*(1-deFog);
-						return 	col;
+					float4 col = 1;
+
+				
+
+					float lightBrightnessReflected = max(0, lightRange - toCenterRefl) *deLightRange;
+
+					//return lightBrightnessReflected;
+
+					col.rgb = (_RayMarchLightColor.rgb * light * shadow * lightBrightness + unity_AmbientEquator.rgb);
+
+					float deFog = saturate(1 - totalDistance / _MaxRayMarchDistance);
+					deFog *= deFog;
+
+					float reflectedFog = max(0, 1 - reflectedDistance / _MaxRayMarchDistance);
+
+					float reflAmount = pow(deFog * reflectedFog, 1);
+
+					reflectedFog *= reflAmount;
+
+					dott *= reflAmount;
+						
+					reflectedSky = reflectedSky * (reflAmount) +(1 - reflAmount);
+
+					lightBrightnessReflected *= reflAmount;
+
+					float3 reflCol = (_RayMarchLightColor.rgb * reflectedShadow * lightBrightnessReflected *(1 - reflectedSky));
+
+					float edge = pow(dott , 4) * reflAmount * reflAmount;
+
+					reflCol = reflCol * _RayMarchReflectionColor.rgb * (1 - edge);
+
+					col.rgb += dott * reflCol;
+
+					col.rgb +=  (noise.rgb - 0.5)*col.rgb*0.2;
+
+					col.rgb = col.rgb * deFog + _RayMarchFogColor.rgb *(1-deFog);
+
+					return 	col;
 
 
 				}
