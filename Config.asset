@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce9959be31177cd48b5abed173f102c2, type: 3}
+  m_Name: Config
+  m_EditorClassIdentifier: Assembly-CSharp:RayMarching:RayMarchingManager/RayMarchingConfigs
+  configurations:
+  - name: One
+    data: sm|27|m|4|0.01|v|5|10.52|x|3|100||col|30|r|3|0.5|g|3|0.5|b|3|0.5|a|1|1||shSo|28|m|4|0.01|v|7|44.9575|x|2|60||
+  - name: Two
+    data: sm|28|m|4|0.01|v|6|74.995|x|3|100||col|36|r|5|0.031|g|5|0.099|b|5|0.264|a|1|1||shSo|23|m|4|0.01|v|2|50|x|2|50||
+  - name: Three
+    data: sm|22|m|4|0.01|v|1|1|x|2|10||col|26|r|5|0.783|g|5|0.033|a|1|1||shSo|23|m|4|0.01|v|2|90|x|2|90||
