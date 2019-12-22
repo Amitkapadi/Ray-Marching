@@ -25,6 +25,7 @@
 
 				#include "UnityCG.cginc"
 				#include "Lighting.cginc"
+				#include "RayMarch.cginc"
 
 				#pragma vertex vert
 				#pragma fragment frag
@@ -75,47 +76,15 @@
 				}
 
 
-				inline float CubeDistance(float3 p, float4 posNsize, float3 size) {
-					
-					p -= posNsize.xyz;
-
-					float3 q = abs(p) - size;
-
-					float dist = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - _RayMarchSmoothness;
-
-					return dist;
-				}
-
 				inline float SphereDistance(float3 position, float4 posNsize, float4 reps) {
 
 					return length(frac((position - posNsize.xyz + reps.y)* reps.z) * reps.x - reps.y) - posNsize.w;
 				}
 
-				inline float Mix(float a, float b, float p) {
-					return a * (1 - p) + b * p;
-				}
+			
 
-				inline float CubicSmin(float a, float b, float k)
-				{
-					float h = max(k - abs(a - b), 0.0) / (k + 0.0001);
-					return min(a, b) - h * h*h*k*(1.0 / 6.0);
-				}
+			
 
-				inline float OpSmoothSubtraction(float d1, float d2, float k) {
-
-					float h = saturate((1 - (d2 + d1) / (k + 0.0001))*0.5);
-
-					return Mix(d1, -d2, h) + k * h * (1 - h);
-
-				}
-
-				inline float DifferenceSDF(float distA, float distB) {
-
-				
-
-
-					return max(distA, -distB);
-				}
 
 
 				inline float SceneSdf(float3 position) {
@@ -124,8 +93,8 @@
 					float s0 = SphereDistance(position, RayMarchSphere_0, RayMarchSphere_0_Reps);
 					float s1 = SphereDistance(position, RayMarchSphere_1, RayMarchSphere_1_Reps);
 
-					float c0 = CubeDistance(position, RayMarchCube_0, RayMarchCube_0_Size.xyz);
-					float c1 =	CubeDistance(position, RayMarchCube_1, RayMarchCube_1_Size.xyz);
+					float c0 = CubeDistance(position, RayMarchCube_0, RayMarchCube_0_Size.xyz, _RayMarchSmoothness);
+					float c1 =	CubeDistance(position, RayMarchCube_1, RayMarchCube_1_Size.xyz, _RayMarchSmoothness);
 
 					float dist = CubicSmin(s0, s1 , _RayMarchSmoothness);
 					
@@ -142,16 +111,21 @@
 				{
 					float res = 1.0;
 					float ph = 1e20;
-					for (float t = mint; t < maxt; )
+					for (float distance = mint; distance < maxt; )
 					{
-						float h = SceneSdf(start + direction * t);
-						if (h < 0.01)
+						float dist = SceneSdf(start + direction * distance);
+				
+						float dsq = dist * dist;
+						
+						float y = dsq / (2*ph);
+						float d = sqrt(dsq - y * y);
+						res = min(res, k*d / max(0.0000001, distance - y));
+						ph = dist;
+						distance += dist;
+
+						if (dist < 0.01)
 							return 0.0;
-						float y = h * h / (2*ph);
-						float d = sqrt(h*h - y * y);
-						res = min(res, k*d / max(0.0000001, t - y));
-						ph = h;
-						t += h;
+
 					}
 					return res;
 				}
@@ -164,7 +138,7 @@
 					t = mint;
 					pos = start;
 
-					for ( int i=0; i<80; i++)
+					for ( int i=0; i<40; i++)
 					{
 						pos = start + direction * t;
 
@@ -209,7 +183,7 @@
 					float dist;
 					float dott = 1;
 
-					const float maxSteps = 80;
+					const float maxSteps = 40;
 
 					const float maxDistance = 10000;
 
